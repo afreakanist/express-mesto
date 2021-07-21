@@ -1,75 +1,135 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/user');
+const CastError = require('../errors/CastError');
+const ConflictError = require('../errors/ConflictError');
+const NotFoundError = require('../errors/NotFoundError');
+const UnauthorizedError = require('../errors/UnauthorizedError');
+const ValidationError = require('../errors/ValidationError');
 
-module.exports.getUsers = (req, res) => {
+const secretKey = crypto.randomBytes(32).toString('hex');
+module.exports.secretKey = secretKey;
+
+module.exports.getUsers = (req, res, next) => {
   User.find({})
     .then((users) => res.send({ data: users }))
-    .catch((err) => res.status(500).send({ message: err.message }));
+    .catch(next);
 };
 
-module.exports.getUserById = (req, res) => {
+module.exports.getUserById = (req, res, next) => {
   const { userId } = req.params;
 
   User.findById(userId)
-    .orFail(new Error('NotFound'))
-    .then((user) => res.send({ data: user }))
+    .orFail(() => next(new NotFoundError('Пользователь не найден')))
+    .then(({
+      _id, email, name, about, avatar,
+    }) => res.send({
+      _id, email, name, about, avatar,
+    }))
     .catch((err) => {
       if (err.name === 'CastError') {
-        return res.status(400).send({ message: err.message });
+        next(new CastError('Неправильный запрос'));
       }
-      if (err.message === 'NotFound') {
-        return res.status(404).send({ message: err.message });
-      }
-      return res.status(500).send({ message: err.message });
-    });
-};
-
-module.exports.createUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-
-  User.create({ name, about, avatar })
-    .then((user) => res.send({ data: user }))
-    .catch((err) => {
       if (err.name === 'ValidationError') {
-        return res.status(400).send({ message: err.message });
+        next(new CastError('Данные не прошли валидацию'));
+      } else {
+        next();
       }
-      return res.status(500).send({ message: err.message });
     });
 };
 
-module.exports.updateProfile = (req, res) => {
+module.exports.getMyUserInfo = (req, res, next) => {
+  User.findById(req.user._id)
+    .then(({
+      _id, email, name, about, avatar,
+    }) => res.send({
+      _id, email, name, about, avatar,
+    }))
+    .catch((err) => {
+      if (err.name === 'CastError') {
+        next(new CastError('Неправильный запрос'));
+      } else {
+        next();
+      }
+    });
+};
+
+module.exports.createUser = (req, res, next) => {
+  const {
+    name, about, avatar, email, password,
+  } = req.body;
+
+  User.findOne({ email }).then((u) => {
+    if (u) {
+      throw new ConflictError('Пользователь с таким email уже существует');
+    }
+    bcrypt.hash(password, 10)
+      .then((hash) => User.create({
+        name, about, avatar, email, password: hash,
+      }))
+      .then((user) => res.status(201).send({ _id: user._id, email: user.email }))
+      .catch((err) => {
+        if (err.name === 'ValidationError') {
+          next(new ValidationError('Данные не прошли валидацию'));
+        } else {
+          next();
+        }
+      });
+  }).catch(next);
+};
+
+module.exports.login = (req, res, next) => {
+  const { email, password } = req.body;
+
+  return User.findUserByCredentials(email, password)
+    .then((user) => {
+      if (!user) {
+        throw new UnauthorizedError('Невозможно авторизоваться');
+      }
+
+      const token = jwt.sign({ _id: user._id }, secretKey, { expiresIn: '7d' });
+
+      res.send({ token });
+
+      /* res.cookie('jwt', token, {
+        maxAge: 3600000 * 24 * 7,
+        httpOnly: true,
+      }).end(); */
+    })
+    .catch(next);
+};
+
+module.exports.updateProfile = (req, res, next) => {
   const { name, about } = req.body;
 
   User.findByIdAndUpdate(req.user._id, { name, about }, { new: true, runValidators: true })
-    .orFail(new Error('NotFound'))
+    .orFail(() => next(new NotFoundError('Пользователь не найден')))
     .then((user) => res.send({ data: user }))
     .catch((err) => {
       if (err.name === 'ValidationError') {
-        return res.status(400).send({ message: err.message });
+        next(new ValidationError('Данные не прошли валидацию'));
       } if (err.name === 'CastError') {
-        return res.status(400).send({ message: err.message });
+        next(new CastError('Неправильный запрос'));
+      } else {
+        next();
       }
-      if (err.message === 'NotFound') {
-        return res.status(404).send({ message: err.message });
-      }
-      return res.status(500).send({ message: err.message });
     });
 };
 
-module.exports.updateAvatar = (req, res) => {
+module.exports.updateAvatar = (req, res, next) => {
   const { avatar } = req.body;
 
   User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
-    .orFail(new Error('NotFound'))
+    .orFail(() => next(new NotFoundError('Пользователь не найден')))
     .then((user) => res.send({ data: user }))
     .catch((err) => {
       if (err.name === 'ValidationError') {
-        return res.status(400).send({ message: err.message });
+        next(new ValidationError('Данные не прошли валидацию'));
       } if (err.name === 'CastError') {
-        return res.status(400).send({ message: err.message });
+        next(new CastError('Неправильный запрос'));
+      } else {
+        next();
       }
-      if (err.message === 'NotFound') {
-        return res.status(404).send({ message: err.message });
-      }
-      return res.status(500).send({ message: err.message });
     });
 };
