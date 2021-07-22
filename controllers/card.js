@@ -32,12 +32,18 @@ module.exports.deleteCard = (req, res, next) => {
       if (!card) {
         next(new NotFoundError('Карточка не найдена'));
       }
-      if (card.owner !== req.user._id) {
+      if (card.owner._id.toString() !== req.user._id) {
         next(new ForbiddenError('Удалять можно только свои карточки'));
       } else {
-        Card.deleteOne(cardId)
-          .then((c) => res.status(200).send(c))
-          .catch(next);
+        Card.deleteOne({ _id: cardId })
+          .then((c) => res.status(200).send({ message: `Карточка ${cardId} была удалена`, ...c }))
+          .catch((err) => {
+            if (err.name === 'CastError') {
+              next(new CastError('Неправильный запрос'));
+            } else {
+              next();
+            }
+          });
       }
     })
     .catch((err) => {
