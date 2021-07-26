@@ -1,5 +1,15 @@
 const router = require('express').Router();
 const { celebrate, Joi } = require('celebrate');
+const validator = require('validator');
+const ValidationError = require('../errors/ValidationError');
+
+const checkURL = (value) => {
+  const result = validator.isURL(value);
+  if (result) {
+    return value;
+  }
+  throw new ValidationError('Некорректная ссылка');
+};
 
 const {
   getUsers, getUserById, getMyUserInfo, updateProfile, updateAvatar,
@@ -20,7 +30,7 @@ router.patch('/me', celebrate({
 }), updateProfile);
 router.patch('/me/avatar', celebrate({
   body: Joi.object().keys({
-    avatar: Joi.string().required(),
+    avatar: Joi.string().required().custom(checkURL),
   }),
 }), updateAvatar);
 
