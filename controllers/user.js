@@ -1,6 +1,5 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const User = require('../models/user');
 const CastError = require('../errors/CastError');
 const ConflictError = require('../errors/ConflictError');
@@ -8,12 +7,11 @@ const NotFoundError = require('../errors/NotFoundError');
 const UnauthorizedError = require('../errors/UnauthorizedError');
 const ValidationError = require('../errors/ValidationError');
 
-const secretKey = crypto.randomBytes(32).toString('hex');
-module.exports.secretKey = secretKey;
+const { NODE_ENV, JWT_SECRET } = process.env;
 
 module.exports.getUsers = (req, res, next) => {
   User.find({})
-    .then((users) => res.send({ data: users }))
+    .then((users) => res.send(users))
     .catch(next);
 };
 
@@ -41,11 +39,12 @@ module.exports.getUserById = (req, res, next) => {
 
 module.exports.getMyUserInfo = (req, res, next) => {
   User.findById(req.user._id)
-    .then(({
-      _id, email, name, about, avatar,
-    }) => res.send({
-      _id, email, name, about, avatar,
-    }))
+    .then((user) => {
+      if (user) {
+        res.status(200).send(user);
+      }
+      return next(new NotFoundError('Пользователь не найден'));
+    })
     .catch((err) => {
       if (err.name === 'CastError') {
         next(new CastError('Неправильный запрос'));
@@ -88,14 +87,14 @@ module.exports.login = (req, res, next) => {
         throw new UnauthorizedError('Невозможно авторизоваться');
       }
 
-      const token = jwt.sign({ _id: user._id }, secretKey, { expiresIn: '7d' });
+      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret-key', { expiresIn: '7d' });
 
-      // res.send({ token });
+      res.send({ token });
 
-      res.cookie('jwt', token, {
+      /* res.cookie('jwt', token, {
         maxAge: 3600000 * 24 * 7,
         httpOnly: true,
-      }).end();
+      }).end(); */
     })
     .catch(next);
 };
@@ -105,7 +104,7 @@ module.exports.updateProfile = (req, res, next) => {
 
   User.findByIdAndUpdate(req.user._id, { name, about }, { new: true, runValidators: true })
     .orFail(() => next(new NotFoundError('Пользователь не найден')))
-    .then((user) => res.send({ data: user }))
+    .then((user) => res.send(user))
     .catch((err) => {
       if (err.name === 'ValidationError') {
         next(new ValidationError('Данные не прошли валидацию'));
@@ -122,7 +121,7 @@ module.exports.updateAvatar = (req, res, next) => {
 
   User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
     .orFail(() => next(new NotFoundError('Пользователь не найден')))
-    .then((user) => res.send({ data: user }))
+    .then((user) => res.send(user))
     .catch((err) => {
       if (err.name === 'ValidationError') {
         next(new ValidationError('Данные не прошли валидацию'));

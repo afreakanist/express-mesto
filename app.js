@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
@@ -9,7 +10,7 @@ const errors = require('./middlewares/errors');
 const { createUser, login } = require('./controllers/user');
 const NotFoundError = require('./errors/NotFoundError');
 
-const { PORT = 3000 } = process.env;
+const { PORT = 5500 } = process.env;
 const app = express();
 
 app.use(bodyParser.json());
@@ -28,6 +29,29 @@ mongoose.connect('mongodb://localhost:27017/mestodb', {
   useUnifiedTopology: true,
 });
 
+const DEFAULT_ALLOWED_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE';
+const allowedCors = [
+  'http://localhost:3000',
+];
+
+app.use((req, res, next) => {
+  const { origin } = req.headers;
+  const { method } = req;
+  const reqHeaders = req.headers['access-control-request-headers'];
+
+  if (allowedCors.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  if (method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Headers', reqHeaders);
+    res.header('Access-Control-Allow-Methods', DEFAULT_ALLOWED_METHODS);
+    return res.end();
+  }
+  // res.header('Access-Control-Allow-Credentials', true);
+
+  return next();
+});
+
 app.post('/signin', celebrate({
   body: Joi.object().keys({
     email: Joi.string().email().required(),
@@ -41,7 +65,6 @@ app.post('/signup', celebrate({
   }),
 }), createUser);
 
-// app.use(auth);
 app.use('/users', auth, require('./routes/user'));
 app.use('/cards', auth, require('./routes/card'));
 
@@ -49,6 +72,4 @@ app.all('*', (req, res, next) => next(new NotFoundError('Запрашиваем�
 
 app.use(errors);
 
-app.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`);
-});
+app.listen(PORT);

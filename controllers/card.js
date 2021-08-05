@@ -6,7 +6,7 @@ const ValidationError = require('../errors/ValidationError');
 
 module.exports.getCards = (req, res, next) => {
   Card.find({})
-    .then((cards) => res.send({ data: cards }))
+    .then((cards) => res.send(cards))
     .catch(next);
 };
 
@@ -14,7 +14,7 @@ module.exports.createCard = (req, res, next) => {
   const { name, link } = req.body;
 
   Card.create({ name, link, owner: { _id: req.user._id } })
-    .then((card) => res.send({ data: card }))
+    .then((card) => res.send(card))
     .catch((err) => {
       if (err.name === 'ValidationError') {
         next(new ValidationError('Данные не прошли валидацию'));
@@ -60,7 +60,7 @@ module.exports.likeCard = (req, res, next) => Card.findByIdAndUpdate(
   { $addToSet: { likes: req.user._id } },
   { new: true },
 ).orFail(() => next(new NotFoundError('Карточка не найдена')))
-  .then((card) => res.send({ data: card }))
+  .then((card) => res.send(card))
   .catch((err) => {
     if (err.name === 'CastError') {
       next(new CastError('Неправильный запрос'));
@@ -74,7 +74,7 @@ module.exports.dislikeCard = (req, res, next) => Card.findByIdAndUpdate(
   { $pull: { likes: req.user._id } },
   { new: true },
 ).orFail(() => next(new NotFoundError('Карточка не найдена')))
-  .then((card) => res.send({ data: card }))
+  .then((card) => res.send(card))
   .catch((err) => {
     if (err.name === 'CastError') {
       next(new CastError('Неправильный запрос'));
