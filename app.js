@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { celebrate, Joi } = require('celebrate');
 const auth = require('./middlewares/auth');
 const errors = require('./middlewares/errors');
+const { requestLogger, errorLogger } = require('./middlewares/logger');
 const { createUser, login } = require('./controllers/user');
 const NotFoundError = require('./errors/NotFoundError');
 
@@ -47,10 +48,11 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', DEFAULT_ALLOWED_METHODS);
     return res.end();
   }
-  // res.header('Access-Control-Allow-Credentials', true);
 
   return next();
 });
+
+app.use(requestLogger);
 
 app.post('/signin', celebrate({
   body: Joi.object().keys({
@@ -70,6 +72,7 @@ app.use('/cards', auth, require('./routes/card'));
 
 app.all('*', (req, res, next) => next(new NotFoundError('Запрашиваемый ресурс не найден')));
 
+app.use(errorLogger);
 app.use(errors);
 
 app.listen(PORT);
